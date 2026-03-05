@@ -6,21 +6,22 @@ services:
       - "9092:9092"
       - "9094:9094"
     environment:
+      # KRaft Settings
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Failproof / Idempotency Settings
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      CLUSTER_ID: '5L6g3nShT-eMCtK--X86sw'
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Log Retention (prevents disk fill-up with 500k rows)
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -28,19 +29,35 @@ services:
     ports:
       - "8080:8080"
     environment:
-      KAFKA_CLUSTERS_0_NAME: delay-pipeline
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_NAME: local-kraft
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-    depends_on:
-      kafka:
-        condition: service_healthy
 
-  app:
+  # The Delay Detector (Consumer)
+  # We scale this to 3 to match our 3 partitions
+  delay-detector:
     build: .
-    container_name: delay-detector
+    command: uv run faststream run consumer.py
+    deploy:
+      replicas: 3
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_URL: kafka:9092
     volumes:
       - .:/app
-    environment:
-      KAFKA_URL: "kafka:9092"
+    working_dir: /app
+
+  # The Data Loader (Producer)
+  # Run this manually or it will trigger on compose up
+  data-producer:
+    build: .
+    command: uv run python producer.py
     depends_on:
-      kafka:
-        condition: service_healthy
+      - kafka
+    environment:
+      KAFKA_URL: kafka:9092
+    volumes:
+      - .:/app
+    working_dir: /app
+    profiles: ["manual"] #prevents it from running automatically every time
