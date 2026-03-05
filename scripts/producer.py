@@ -1,15 +1,24 @@
 import asyncio
+import os
+import json
 import polars as pl
+import logging
 from faststream import FastStream
 from faststream.kafka import KafkaBroker
 from pydantic import BaseModel
 
+# --- Setup Logging ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("producer")
 
-#setup faststream producer
-Broker = KafkaBroker("localhost:9092")
-app = FastStream(Broker)
+# --- Configuration ---
+KAFKA_URL = os.getenv("KAFKA_URL", "localhost:9094")
+TOPIC_NAME = "deliveries"
+CSV_PATH = "data/deliveries_500k.csv"
 
-# Define the data model for deliveries
+broker = KafkaBroker(KAFKA_URL)
+app = FastStream(broker)
+
 class Delivery(BaseModel):
     delivery_id: int
     city: str
@@ -18,34 +27,44 @@ class Delivery(BaseModel):
     expected_time: str
     delivery_time: str
 
-async def produce_deliveries():
-    async with Broker:
-        # 2. Read CSV with Polars (Multithreaded & Fast)
-        # Using scan_csv for large files (500k rows)
-        df = pl.scan_csv("data/deliveries_500k.csv").collect()
+async def stream_data():
+    async with broker:
+        if not os.path.exists(CSV_PATH):
+            logger.error(f"File not found: {CSV_PATH}")
+            return
 
-        print(f"Starting stream for {len(df)} records...")
+        logger.info(f"Reading {CSV_PATH}...")
+        # Polars handles the 500k rows in milliseconds
+        df = pl.scan_csv(CSV_PATH).collect()
+        records = df.to_dicts()
+        total_records = len(records)
+        
+        logger.info(f"Starting stream of {total_records} records to '{TOPIC_NAME}'")
 
-        # 3. Stream rows asynchronously
-        # .to_dicts() is faster than pandas .iterrows()
-        for row in df.to_dicts():
-            await Broker.publish(
-                Delivery(**row),
-                topic="deliveries"
-            )
-            print(f"Sent: {row['delivery_id']}")
+        batch_size = 200 
+        for i in range(0, total_records, batch_size):
+            batch = records[i : i + batch_size]
             
-            # non-blocking sleep to simulate real-time streaming
+            tasks = [
+                broker.publish(
+                    json.dumps(row),
+                    topic=TOPIC_NAME,
+                    key=str(row['delivery_id']).encode()
+                )
+                for row in batch
+            ]
+            
+            await asyncio.gather(*tasks)
+
+            if i % 10000 == 0:
+                logger.info(f"Progress: {i}/{total_records} sent")
+
             await asyncio.sleep(0.01)
+
+        logger.info("Streaming complete!")
 
 if __name__ == "__main__":
     try:
-        asyncio.run(produce_deliveries())
+        asyncio.run(stream_data())
     except KeyboardInterrupt:
-        print("Producer stopped.")
-
-
-
-
-
-
+        logger.warning("Producer stopped by user.")
