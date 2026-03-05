@@ -1,26 +1,31 @@
-# Use Python 3.13 as specified in your TOML
+# Use Python 3.13 slim for a small, fast image
 FROM python:3.13-slim
 
-# Install uv
+# Install uv from the official binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Enable bytecode compilation for faster startups
-ENV UV_COMPILE_BYTECODE=1
-# Ensure logs are sent straight to terminal
-ENV PYTHONUNBUFFERED=1
+#Optimizations for faster builds and smaller image size 
+#Stop Python from buffering logs
+#Prevent Python from writing .pyc files in the container
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_COMPILE_BYTECODE=1
 
-# Copy project files
-COPY pyproject.toml .
-# If you have a lockfile, copy it to ensure exact versions
-# COPY uv.lock .
+# Copy dependency files first to leverage Docker layer caching
+COPY pyproject.toml uv.lock* ./
 
-# Install dependencies using the pyproject.toml
-RUN uv pip install --system .
+# Install dependencies globally in the container (standard for Docker)
+# To keep the image size small
+RUN uv pip install --system --no-cache -r pyproject.toml
 
-# Copy source code
+# Copy the rest of the application code
 COPY . .
 
-# Run the FastStream app
-CMD ["faststream", "run", "consumer:app", "--host", "0.0.0.0"]
+# Create the data directory in case it's missing (helps producer not crash)
+RUN mkdir -p /app/data
+
+# Default command for the Consumer (overridden for the Producer in docker-compose)
+# use 'python -m faststream' to ensure the path is correctly picked up
+CMD ["faststream", "run", "consumer:app"]
