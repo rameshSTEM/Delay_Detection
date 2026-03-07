@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("producer")
 
 # --- Configuration ---
-KAFKA_URL = os.getenv("KAFKA_URL", "localhost:9094")
 TOPIC_NAME = "deliveries"
+KAFKA_URL = os.getenv("KAFKA_URL", "localhost:9094")
 CSV_PATH = "data/deliveries_500k.csv"
 
 broker = KafkaBroker(KAFKA_URL)
