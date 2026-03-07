@@ -42,7 +42,7 @@ services:
 
   delay-detector:
     build: .
-    command: uv run faststream run consumer.py
+    command: uv run faststream run scripts.consumer:app
     deploy:
       replicas: 3
     depends_on:
