@@ -62,6 +62,7 @@ services:
         condition: service_healthy
     environment:
       KAFKA_URL: kafka:9092
+      PYTHONPATH: .
     volumes:
       - .:/app
     working_dir: /app
