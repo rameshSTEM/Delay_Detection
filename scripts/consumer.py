@@ -52,8 +52,8 @@ async def analyze_delay_batch(messages: list[Delivery], logger: Logger):
         # Using .cast(pl.Datetime) if strings are ISO8601, 
         # or .str.to_datetime if they are custom formats.
         df = df.with_columns([
-            pl.col("expected_time").str.to_datetime(strict=False),
-            pl.col("delivery_time").str.to_datetime(strict=False)
+        pl.col("expected_time").cast(pl.Datetime),
+        pl.col("delivery_time").cast(pl.Datetime)
         ]).drop_nulls(subset=["expected_time", "delivery_time"])
 
         if not df.is_empty():
