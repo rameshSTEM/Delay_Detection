@@ -28,7 +28,7 @@ class Delivery(BaseModel):
     group_id="delay-detection-service",
     batch=True,
     max_records=1000,
-    timeout_ms=3000,
+    max_interval_ms=3000,
     auto_offset_reset="earliest",
 ) # type: ignore
 
