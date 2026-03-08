@@ -55,6 +55,7 @@ services:
     working_dir: /app
 
   data-producer:
+    container_name: data-producer
     build: .
     command: uv run python scripts/producer.py
     depends_on:
