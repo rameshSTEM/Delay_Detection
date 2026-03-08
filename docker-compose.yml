@@ -70,3 +70,6 @@ services:
       - .:/app
     working_dir: /app
     profiles: ["manual"]
+  
+volumes:
+  uv-cache:
