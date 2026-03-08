@@ -50,8 +50,10 @@ services:
         condition: service_healthy
     environment:
       KAFKA_URL: kafka:9092
+      UV_LINK_MODE: copy
     volumes:
       - .:/app
+      - uv-cache:/root/.cache/uv  # Persists the downloads
     working_dir: /app
 
   data-producer:
