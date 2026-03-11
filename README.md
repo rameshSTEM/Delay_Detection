@@ -1,4 +1,4 @@
-**Real-Time Delivery Delay Detection Pipeline**
+**Real-Time Delivery Delay Detection Pipeline using python's native library and modules**
 
 A high-performance data engineering pipeline designed to detect and analyze delivery delays in real-time. This system uses ***Kafka*** for event streaming, ***FastStream*** for asynchronous consumption, and ***Polars*** for vectorized batch processing.
 
